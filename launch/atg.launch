@@ -1,0 +1,5 @@
+<launch>
+  <node name="aspect_transition_graph" pkg="atg_autoencoder_mixture" type="atg_node.py" />
+  <node name="atg_visualizer" pkg="atg_autoencoder_mixture" type="atg_visualizer.py" />
+  <node name="current_observation" pkg="atg_autoencoder_mixture" type="current_observation_server.py" />
+</launch>

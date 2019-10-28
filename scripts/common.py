@@ -11,3 +11,17 @@ from sklearn.cluster import KMeans
 import matplotlib.pyplot as plt
 from PIL import Image
 import glob
+import cv2
+
+import networkx as nx
+import random
+from mpl_toolkits.mplot3d import Axes3D
+import matplotlib.pyplot as plt
+
+RECONSTRUCTION_TOLERANCE = 0.015
+IMAGE_SIZE = 64
+NEED_CROP = True
+CROP_I = 250
+CROP_J = 300
+CROP_H = 100
+CROP_W = 80

@@ -13,7 +13,7 @@ from cv_bridge import CvBridge, CvBridgeError
 from atg_autoencoder_mixture.srv import CurrentObservation, CurrentObservationResponse
 
 class CurrentObservationServer:
-    NODE_NAME = "CurrentObservation"
+    NODE_NAME = "current_observation"
 
     def __init__(self):
         rospy.init_node(self.NODE_NAME)
