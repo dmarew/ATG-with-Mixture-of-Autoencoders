@@ -1,6 +1,23 @@
 # Aspect Transition Graph 
 Unsupervised aspect transition graph modeling  using mixture of autoencoders
 ## Install
+
+``mkdir -p catkin_ws/src``
+
+``cd catkin_ws/src/``
+
+``git clone https://github.com/dmarew/atg_autoencoder_mixture.git``
+
+``cd atg_autoencoder_mixture/``
+
+``conda env create -f environment.yml``
+
+``conda activate atgma``
+
+``cd ../../ ; catkin_make``
+
+
+<!--
 ``pip install -U rospkg``
 
 ``pip install -U catkin_pkg``
@@ -10,3 +27,4 @@ Unsupervised aspect transition graph modeling  using mixture of autoencoders
 ``pip install empy``
 
 ``conda install -c conda-forge opencv``
+-->
