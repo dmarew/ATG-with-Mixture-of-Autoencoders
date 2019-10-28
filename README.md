@@ -4,7 +4,7 @@ Unsupervised aspect transition graph modeling  using mixture of autoencoders
 
 ``mkdir -p catkin_ws/src``
 
-``cd catkin_ws/src``
+``cd catkin_ws/src/atg_autoencoder_mixture/``
 
 ``git clone https://github.com/dmarew/atg_autoencoder_mixture.git``
 
@@ -12,7 +12,7 @@ Unsupervised aspect transition graph modeling  using mixture of autoencoders
 
 ``conda activate atgma``
 
-``cd .. & catkin_make``
+``cd ../../ & catkin_make``
 
 
 <!--
