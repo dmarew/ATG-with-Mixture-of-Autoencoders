@@ -14,7 +14,7 @@ Unsupervised aspect transition graph modeling  using mixture of autoencoders
 
 ``conda activate atgma``
 
-``cd ../../ & catkin_make``
+``cd ../../ ; catkin_make``
 
 
 <!--
