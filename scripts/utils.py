@@ -1,7 +1,8 @@
 from common import *
+from models import *
 
 def to_var(x, volatile=False):
-	if torch.cuda.is_available():
+	if CUDA_VAILABLE:
 		x = x.cuda()
 
 	return Variable(x, volatile=volatile)
@@ -26,7 +27,7 @@ def cv_to_ros(image, bridge):
 	return  bridge.cv2_to_imgmsg(image)
 
 def tensor_to_cv(tensor):
-	pil_image = transforms.functional.to_pil_image(tensor.squeeze(0))
+	pil_image = transforms.functional.to_pil_image(tensor.cpu().squeeze(0))
 	return pil_to_cv(pil_image)
 
 def tensor_to_ros(tensor, cv_bridge):
@@ -40,7 +41,7 @@ def atg_dict_to_mat(atg, num_aspect_nodes, action_space_size):
 		s, a, s_prime = key
 		atg_arr[s-1, a, s-1] = value
 	return atg_arr/(1e-12 + np.sum(atg_arr, axis=(0, 1), keepdims=True))
-def simulate_action(action_space = 6):
+def simulate_action(action_space = 7):
 	return int(np.random.randint(action_space))
 def simulate_action_with_file(file_path, action_index):
 	return int(np.random.randint(action_space))
@@ -66,7 +67,7 @@ def get_reconstruction_loss_with_all_ae(image, autoencoder_mixture, loss_fn):
     for aspect, aspect_param in autoencoder_mixture.items():
         image = to_var(image)
         recon_image = aspect_param['autoencoder'](image)
-        recon_loss  = loss_fn(recon_image, image).data.sum()
+        recon_loss  = loss_fn(recon_image, image).cpu().data.sum()
         recon_loss_mix.append(recon_loss)
         recon_loss_mix_normalized.append(abs(recon_loss - aspect_param['recon_error']))
     return np.array(recon_loss_mix), np.array(recon_loss_mix_normalized)
@@ -84,6 +85,10 @@ def belief_for_observation(image, autoencoder_mixture, loss_fn):
     belief = 1./get_reconstruction_loss_with_all_ae(image, autoencoder_mixture, loss_fn)[0]
     belief /= belief.sum()
     return belief
+def init_autoencoder():
+	if CUDA_VAILABLE:
+		return nn.Sequential(Encoder(), Decoder()).cuda()
+	return nn.Sequential(Encoder(), Decoder())
 def train_autoencoder(autoencoder, optimizer, criterion, data_loader, number_of_epochs=1, name='main', verbose=False):
 	print('Training %s ...'%(name))
 	for epoch in range(number_of_epochs):
@@ -99,7 +104,7 @@ def train_autoencoder(autoencoder, optimizer, criterion, data_loader, number_of_
 			optimizer.zero_grad()
 			loss.backward()
 			optimizer.step()
-			running_loss += loss.data.numpy()
+			running_loss += loss.cpu().data.numpy()
 			if batch_index % 100==0 and verbose:
 				print('epoch %d loss: %.5f' % (epoch, running_loss/((batch_index + 1))))
 			if batch_index != 0 and batch_index % 1000 == 0:

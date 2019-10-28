@@ -6,7 +6,7 @@ import sys
 import os
 import numpy as np
 import rospy
-from std_msgs.msg import String, Header, Float64MultiArray, MultiArrayDimension, MultiArrayLayout
+from std_msgs.msg import String, Header, Float64MultiArray, MultiArrayDimension, MultiArrayLayout, Float32
 from sensor_msgs.msg import Image, JointState
 from cv_bridge import CvBridge, CvBridgeError
 from atg_autoencoder_mixture.srv import *
@@ -33,7 +33,7 @@ class AspectTransitionGraph:
         self.atg_pub = rospy.Publisher("/atg", Float64MultiArray, queue_size=10)
         self.aspect_nodes_pub = rospy.Publisher("/aspect_nodes", AspectNodes, queue_size=10)
 
-        self.action_pub = rospy.Publisher("/joint_states", JointState, queue_size=10)
+        self.action_pub = rospy.Publisher("/ptu_python_goal", Float32, queue_size=1)
         self.bridge = CvBridge()
         self.observation_count = 0
         self.action_count = 0
@@ -43,11 +43,13 @@ class AspectTransitionGraph:
         self.aspect_count = 0
         self.autoencoder_mixture = {}
         self.autoencoder_mixture[self.aspect_count] = {}
-        self.autoencoder_mixture[self.aspect_count]['autoencoder'] = nn.Sequential(Encoder(), Decoder())
+        self.autoencoder_mixture[self.aspect_count]['autoencoder'] = init_autoencoder()#nn.Sequential(Encoder(), Decoder())
         self.autoencoder_mixture[self.aspect_count]['recon_error'] = 0
         self.aspect_images = []
         self.atg = {}
         self.prev_aspect_node = None
+        if CUDA_VAILABLE:
+            print('Using GPU to train autoencoder...')
     def build_atg(self, obs_save_dir=None):
         action = 0
         while not rospy.is_shutdown():
@@ -57,7 +59,7 @@ class AspectTransitionGraph:
             if NEED_CROP:
                 cv_image = cv_image[CROP_I:CROP_I+CROP_H, CROP_J:CROP_J + CROP_W]
             if obs_save_dir is not None:
-                obs_save_dir_full = '/home/daniel/Desktop/atg/catkin_ws/src/atg_autoencoder_mixture/' + obs_save_dir
+                obs_save_dir_full = '/home/daniel/Desktop/catkin_ws/src/atg_autoencoder_mixture/' + obs_save_dir
                 if not os.path.exists(obs_save_dir_full):
                     os.makedirs(obs_save_dir_full)
 
@@ -80,11 +82,11 @@ class AspectTransitionGraph:
 
                 print('Observation: %d not matched hence Creating aspect_%d'%(self.observation_count, self.aspect_count))
                 print()
-                self.aspect_images.append(tensor_to_ros(image.data, self.bridge))
+                self.aspect_images.append(tensor_to_ros(image.cpu().data, self.bridge))
 
                 self.autoencoder_mixture[self.aspect_count] = {}
-                self.autoencoder_mixture[self.aspect_count]['autoencoder'] = nn.Sequential(Encoder(), Decoder())
-                gen_images = generate_random_versions_of_image(image.squeeze(0), random_transformer, n_versions=300)
+                self.autoencoder_mixture[self.aspect_count]['autoencoder'] = init_autoencoder()# nn.Sequential(Encoder(), Decoder())
+                gen_images = generate_random_versions_of_image(image.cpu().squeeze(0), random_transformer, n_versions=300)
                 ds = AutoEncoderDataset(gen_images, aspect_image=image)
                 optimizer = optim.Adam(self.autoencoder_mixture[self.aspect_count]['autoencoder'].parameters(), lr=1e-3)
                 criterion = nn.BCELoss()
@@ -117,7 +119,7 @@ class AspectTransitionGraph:
                     self.atg[atg_entry_key] = 1
 
                 print('ATG: ', self.atg, self.aspect_count)
-                atg_mat = atg_dict_to_mat(self.atg, self.aspect_count, 6)
+                atg_mat = atg_dict_to_mat(self.atg, self.aspect_count, len(ACTION_PARAMETER_SPACE))
                 print(atg_mat)
                 atg_mat_layout = MultiArrayLayout()
                 dim1 = MultiArrayDimension()
@@ -150,13 +152,14 @@ class AspectTransitionGraph:
             self.observation_count += 1
             self.prev_aspect_node = c_aspect_node
             action = simulate_action()
+            self.action_pub.publish(ACTION_PARAMETER_SPACE[action])
             print('taking action %d'%(action))
             self.rate.sleep()
             print('Done taking action')
 
 
 def main(args):
-    at = AspectTransitionGraph(rate=1)
+    at = AspectTransitionGraph(rate=0.1)
 
     try:
         at.build_atg('data/hia')

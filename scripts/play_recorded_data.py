@@ -38,7 +38,7 @@ class RecordedObservationServer:
         return CurrentObservationResponse(image)
 
 if __name__=="__main__":
-    record_path = '/home/daniel/Desktop/atg/catkin_ws/src/atg_autoencoder_mixture/data/real_aspects/Aspect-Raw'
+    record_path = '/home/daniel/Desktop/catkin_ws/src/atg_autoencoder_mixture/data/real_aspects/Aspect-Raw'
     frs = RecordedObservationServer(record_path, size_of_dataset=1353)
     try:
         rospy.spin()

@@ -117,5 +117,5 @@ dependencies:
     - pyyaml==5.1.2
     - rospkg==1.1.10
     - werkzeug==0.16.0
-prefix: /home/daniel/miniconda3/envs/atgma
+#prefix: /home/daniel/miniconda3/envs/atgma
 
