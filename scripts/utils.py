@@ -85,6 +85,10 @@ def belief_for_observation(image, autoencoder_mixture, loss_fn):
     belief = 1./get_reconstruction_loss_with_all_ae(image, autoencoder_mixture, loss_fn)[0]
     belief /= belief.sum()
     return belief
+def belief_from_recon_loss(recon_loss):
+	belief = 1./recon_loss
+	belief /=belief.sum()
+	return belief
 def init_autoencoder():
 	if CUDA_VAILABLE:
 		return nn.Sequential(Encoder(), Decoder()).cuda()
@@ -129,3 +133,9 @@ def generate_atg_graph(atg_mat, aspect_node_images, cv_bridge):
 					G.add_edge(node_list[s], node_list[s_prime], weight=atg_mat[s, a, s_prime])
 					num_edges +=1
 	return G, pos, labels, num_edges
+def line_select_callback(eclick, erelease):
+    x1, y1 = eclick.xdata, eclick.ydata
+    x2, y2 = erelease.xdata, erelease.ydata
+
+    rect = plt.Rectangle( (min(x1,x2),min(y1,y2)), np.abs(x1-x2), np.abs(y1-y2) )
+    print(rect)

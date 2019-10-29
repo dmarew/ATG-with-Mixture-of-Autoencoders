@@ -75,8 +75,8 @@ class ATGVisulizer:
                 a.set_aspect('equal')
                 im = a.imshow(G.node[n]['image'])
                 #im = ax.imshow(image)
-                patch = patches.Circle((IMAGE_SIZE//2, IMAGE_SIZE//2), radius=IMAGE_SIZE//2-4, transform=a.transData)
-                im.set_clip_path(patch)
+                #patch = patches.Circle((IMAGE_SIZE//2, IMAGE_SIZE//2), radius=IMAGE_SIZE//2-4, transform=a.transData)
+                #im.set_clip_path(patch)
                 a.axis('off')
             ax.axis('off')
 
@@ -84,8 +84,8 @@ class ATGVisulizer:
 
             #nx.draw_networkx_nodes(G,pos)
             #nx.draw_networkx_labels(G,pos,labels,font_size=16)
-            #nx.draw_networkx_edges(G,pos, arrowstyle='->', arrowsize=10, edge_colors = range(2, num_edges + 2),
-            #                   edge_cmap=plt.cm.Blues, width=2)
+            nx.draw_networkx_edges(G,pos, arrowstyle='->', arrowsize=10, edge_colors = range(2, num_edges + 2),
+                               edge_cmap=plt.cm.Blues, width=2)
 
         plt.draw_all()
 
