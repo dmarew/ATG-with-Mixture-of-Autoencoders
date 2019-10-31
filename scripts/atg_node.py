@@ -38,6 +38,7 @@ class AspectTransitionGraph:
         self.rate = rospy.Rate(rate)
         ros_image = self.get_current_observation().img
         first_image = self.bridge.imgmsg_to_cv2(ros_image)
+        first_image = cv2.cvtColor(first_image, cv2.COLOR_BGR2RGB)
         print('Got first Image')
         ci = CropImage(first_image)
         cv2.imshow('image', ci.show_image())
@@ -58,6 +59,7 @@ class AspectTransitionGraph:
         self.autoencoder_mixture[self.aspect_count]['recon_error'] = 0
         self.aspect_images = []
         self.atg = {}
+        self.atg_mat = np.zeros((0, len(ACTION_PARAMETER_SPACE), 0))
         self.prev_aspect_node = None
         self.prev_aspect_node_belief = None
         self.time_last_aspect_discoverd = 0
@@ -66,11 +68,15 @@ class AspectTransitionGraph:
 
         time_elapsed = time.time()
 
-        action = 0
+        action = None
+        first_node_found = False
+        reward_s_a = {}
+        self.reward_a = 1e-8*np.ones(NUM_ACTIONS)
         while not rospy.is_shutdown():
 
             ros_image = self.get_current_observation().img
             cv_image = self.bridge.imgmsg_to_cv2(ros_image)
+            cv_image = cv2.cvtColor(cv_image, cv2.COLOR_BGR2RGB)
             if NEED_CROP:
                 cv_image = cv_image[self.c_coord_tl[1]:self.c_coord_br[1], self.c_coord_tl[0]:self.c_coord_br[0]]
             if obs_save_dir is not None:
@@ -104,7 +110,7 @@ class AspectTransitionGraph:
                 self.aspect_images.append(tensor_to_ros(image.cpu().data, self.bridge))
 
                 self.autoencoder_mixture[self.aspect_count] = {}
-                self.autoencoder_mixture[self.aspect_count]['autoencoder'] = init_autoencoder()# nn.Sequential(Encoder(), Decoder())
+                self.autoencoder_mixture[self.aspect_count]['autoencoder'] = init_autoencoder()
                 gen_images = generate_random_versions_of_image(image.cpu().squeeze(0), random_transformer, n_versions=300)
                 ds = AutoEncoderDataset(gen_images, aspect_image=image)
                 optimizer = optim.Adam(self.autoencoder_mixture[self.aspect_count]['autoencoder'].parameters(), lr=1e-3)
@@ -132,34 +138,67 @@ class AspectTransitionGraph:
                 #imshow(make_grid(test_recon_and_image), True)
                 self.aspect_count += 1
 
-            if self.prev_aspect_node is not None:
+            if action is not None:
 
-
+                #print(len(self.prev_aspect_node_belief), len(c_aspect_node_blief))
+                #print('ATG BEFORE: ', self.atg, c_aspect_node_blief)
                 for s in range(len(self.prev_aspect_node_belief)):
                     for s_prime in range(len(c_aspect_node_blief)):
                         atg_entry_key = (s, action,  s_prime)
+
+                        self.atg_mat = atg_dict_to_mat(self.atg, len(c_aspect_node_blief), NUM_ACTIONS)
+                        
+
+                        if first_node_found:
+
+                            H_t = entropy_from_belief(self.atg_mat[s, action, :])
+
                         if atg_entry_key in self.atg.keys():
                             self.atg[atg_entry_key] += self.prev_aspect_node_belief[s] * c_aspect_node_blief[s_prime]
                         else:
+                            reward_s_a[(s, action)] = {}
+                            reward_s_a[(s, action)]['queue'] = [1.]
+                            reward_s_a[(s, action)]['mean'] = None
+                            reward_s_a_mat = np.ones((len(self.prev_aspect_node_belief), NUM_ACTIONS))
                             self.atg[atg_entry_key] = self.prev_aspect_node_belief[s] * c_aspect_node_blief[s_prime]
+
+                        self.atg_mat = atg_dict_to_mat(self.atg, len(c_aspect_node_blief), NUM_ACTIONS)
+
+                        if first_node_found:
+                            H_t_1 = entropy_from_belief(self.atg_mat[s, action, :])
+                            delta_H = H_t_1 - H_t
+                            queue, running_mean = update_reward(reward_s_a[(s, action)]['queue'], delta_H)
+                            reward_s_a[(s, action)]['queue'] = queue
+                            reward_s_a[(s, action)]['mean']  = running_mean
+                            reward_s_a_mat = reward_dict_to_mat(reward_s_a, len(self.prev_aspect_node_belief))
+                            #print(s, action, running_mean)
+                            #print(delta_H)
+                #print('ATG AFTER: ', self.atg)
+                if not first_node_found:
+                    first_node_found = True
 
                 print('Time since new aspect node discoverd: ', self.time_last_aspect_discoverd ,
                       '   Number of Aspect nodes: ', self.aspect_count,
                       'Time (secs)', time.time() - time_elapsed)
-                atg_mat = atg_dict_to_mat(self.atg, self.aspect_count, len(ACTION_PARAMETER_SPACE))
-                #print(atg_mat)
+
+                self.reward_a = np.zeros(len(ACTION_PARAMETER_SPACE))
+                for act in range(len(ACTION_PARAMETER_SPACE)):
+                    #print('reward: ', reward_s_a_mat[:, act])
+                    self.reward_a[act] = (self.prev_aspect_node_belief*abs(reward_s_a_mat[:, act])).sum()
+                #self.atg_mat = atg_dict_to_mat(self.atg, self.aspect_count, len(ACTION_PARAMETER_SPACE))
+                #print(self.atg_mat)
                 atg_mat_layout = MultiArrayLayout()
                 dim1 = MultiArrayDimension()
                 dim2 = MultiArrayDimension()
                 dim3 = MultiArrayDimension()
                 dim1.label = 's'
-                dim1.size  = atg_mat.shape[0]
+                dim1.size  = self.atg_mat.shape[0]
 
                 dim2.label = 'a'
-                dim2.size  = atg_mat.shape[1]
+                dim2.size  = self.atg_mat.shape[1]
 
                 dim3.label = 's_prime'
-                dim3.size  = atg_mat.shape[2]
+                dim3.size  = self.atg_mat.shape[2]
 
                 dims = [dim1, dim2, dim3]
 
@@ -167,7 +206,7 @@ class AspectTransitionGraph:
                 atg_mat_layout.data_offset = 0
 
                 atg_mat_fma.layout = atg_mat_layout
-                atg_mat_fma.data = atg_mat.reshape(1, -1).tolist()[0]
+                atg_mat_fma.data = self.atg_mat.reshape(1, -1).tolist()[0]
 
             aspect_nodes = AspectNodes()
             aspect_nodes.data = self.aspect_images
@@ -179,7 +218,12 @@ class AspectTransitionGraph:
             self.observation_count += 1
             self.prev_aspect_node = c_aspect_node
             self.prev_aspect_node_belief = c_aspect_node_blief
-            action = simulate_action()
+            if ACTION_SELECTION_MODE =='RANDOM':
+                action = random_action()
+            elif ACTION_SELECTION_MODE == 'IM':
+                action = im_action(self.reward_a)
+            else:
+                print('UNKOWN ACTION SELECTION!!')
             self.action_pub.publish(ACTION_PARAMETER_SPACE[action])
             print('taking action %d'%(action))
             self.rate.sleep()
@@ -187,23 +231,32 @@ class AspectTransitionGraph:
         print('ATG took %.2f secs to discover %d Aspect Nodes and converge'%(time.time()-time_elapsed, self.aspect_count))
         result = {}
         result['autoencoder_mixture'] = self.autoencoder_mixture
-        result['atg'] = atg_mat
+        result['atg'] = self.atg_mat
         result['running_time'] = time.time()-time_elapsed
         result['n_aspect_nodes'] = self.aspect_count
         return result
 def main(args):
     at = AspectTransitionGraph(rate=ATG_NODE_RATE)
-    number_of_experiments = 10
+    number_of_experiments = 1
+    experiment_name = 'can_random'
     results = {}
     results['number_of_experiments'] = number_of_experiments
+    exp_time = time.time()
     try:
 
         for exp in range(number_of_experiments):
-            results[exp] =  at.build_atg('data/can_' + str(exp))
+            print('='*100)
+            print('[ RUNNING EXPERIMENT %d / %d ]'%(exp + 1, number_of_experiments))
+            print('='*100)
+            results[exp] =  at.build_atg('data/'+experiment_name + '/' + experiment_name + '_' + str(exp))
             at.reset_atg()
-        with open('/home/daniel/Desktop/catkin_ws/src/atg_autoencoder_mixture/results.pickle', 'wb') as handle:
+            print('='*100)
+            print('[ DONE RUNNING EXPERIMENT %d / %d ]'%(exp +1, number_of_experiments))
+            print('='*100)
+
+        with open('/home/daniel/Desktop/catkin_ws/src/atg_autoencoder_mixture/results_'+experiment_name+'.pickle', 'wb') as handle:
             pickle.dump(results, handle, protocol=pickle.HIGHEST_PROTOCOL)
-        print('Experiment Done!!!')
+        print('Experiment Done!!! it took %.2f mins'%((time.time()-exp_time)/60.))
     except KeyboardInterrupt:
         print("Shutting down")
 if __name__ == '__main__':

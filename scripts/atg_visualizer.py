@@ -46,7 +46,7 @@ class ATGVisulizer:
             ax.set_aspect('equal')
             #nx.draw_networkx_edges(G, pos, width=15.0, alpha=1., ax=ax)
 
-            if(n_nodes>1):
+            if(n_nodes>1 and atg_n_states>1):
                 #edge_weights = []
                 #edge_list = []
                 '''

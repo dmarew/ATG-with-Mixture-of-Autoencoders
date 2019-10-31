@@ -4,7 +4,6 @@ from models import *
 def to_var(x, volatile=False):
 	if CUDA_VAILABLE:
 		x = x.cuda()
-
 	return Variable(x, volatile=volatile)
 def np_to_tensor(x):
 	return torch.from_numpy(x)
@@ -14,7 +13,6 @@ def cv_to_pil(img):
 def pil_to_cv(img):
 	cv_img  = np.array(img)
 	return cv2.cvtColor(cv_img, cv2.COLOR_RGB2BGR)
-
 
 def cv_to_tensor(img, image_size=128):
 	img = cv_to_pil(img)
@@ -35,14 +33,22 @@ def tensor_to_ros(tensor, cv_bridge):
 	return cv_bridge.cv2_to_imgmsg(cv_img)
 
 def atg_dict_to_mat(atg, num_aspect_nodes, action_space_size):
-	atg_arr = np.zeros((num_aspect_nodes, action_space_size, num_aspect_nodes),dtype=np.float64)
+	atg_arr = 1e-12 + np.zeros((num_aspect_nodes, action_space_size, num_aspect_nodes),dtype=np.float64)
 
 	for key, value in atg.items():
 		s, a, s_prime = key
-		atg_arr[s-1, a, s-1] = value
-	return atg_arr/(1e-12 + np.sum(atg_arr, axis=(0, 1), keepdims=True))
-def simulate_action(action_space = 7):
-	return int(np.random.randint(action_space))
+		atg_arr[s, a, s_prime] = value
+
+	return atg_arr/(np.sum(atg_arr, axis=2, keepdims=True))
+def random_action():
+	return int(np.random.randint(NUM_ACTIONS))
+def im_action(r_a):
+	print('before R_a: ', r_a)
+	r_a += 1e-8
+	r_a/=r_a.sum()
+	print('after R_a: ', r_a)
+	return int(np.random.choice(np.arange(NUM_ACTIONS), p=r_a))
+
 def simulate_action_with_file(file_path, action_index):
 	return int(np.random.randint(action_space))
 
@@ -61,16 +67,16 @@ def generate_random_versions_of_image(image, transformer, n_versions=10):
     return torch.stack(output)
 
 def get_reconstruction_loss_with_all_ae(image, autoencoder_mixture, loss_fn):
-    recon_loss_mix = []
-    recon_loss_mix_normalized = []
+	recon_loss_mix = []
+	recon_loss_mix_normalized = []
 
-    for aspect, aspect_param in autoencoder_mixture.items():
-        image = to_var(image)
-        recon_image = aspect_param['autoencoder'](image)
-        recon_loss  = loss_fn(recon_image, image).cpu().data.sum()
-        recon_loss_mix.append(recon_loss)
-        recon_loss_mix_normalized.append(abs(recon_loss - aspect_param['recon_error']))
-    return np.array(recon_loss_mix), np.array(recon_loss_mix_normalized)
+	for aspect, aspect_param in autoencoder_mixture.items():
+		image = to_var(image)
+		recon_image = aspect_param['autoencoder'](image)
+		recon_loss  = loss_fn(recon_image, image).cpu().data.sum()
+		recon_loss_mix.append(recon_loss)
+		recon_loss_mix_normalized.append(abs(recon_loss - aspect_param['recon_error']))
+	return np.array(recon_loss_mix), np.array(recon_loss_mix_normalized)
 def current_aspect_node(recon_loss, aspect_count):
 	if np.min(recon_loss) > RECONSTRUCTION_TOLERANCE:
 		return aspect_count
@@ -80,7 +86,20 @@ def get_mixure_output(autoencoder_mixture, images, n_clusters=10):
     for cluster in range(n_clusters):
         output.append(autoencoder_mixture[cluster]['autoencoder'](images))
     return output
+def update_reward(queue, delta_H):
+	if len(queue)== MAX_QUEUE_SIZE:
+		queue[:-1] = queue[1:]
+		queue[-1] = delta_H
+	else:
+		queue.append(delta_H)
+	return queue, np.array(queue).mean()
+def reward_dict_to_mat(reward_dict, num_aspect_nodes):
+	r_s_a = np.zeros((num_aspect_nodes, len(ACTION_PARAMETER_SPACE)))
 
+	for key, value in reward_dict.items():
+		s, a = key
+		r_s_a[s, a] = value['mean']
+	return 	r_s_a
 def belief_for_observation(image, autoencoder_mixture, loss_fn):
     belief = 1./get_reconstruction_loss_with_all_ae(image, autoencoder_mixture, loss_fn)[0]
     belief /= belief.sum()
@@ -89,6 +108,8 @@ def belief_from_recon_loss(recon_loss):
 	belief = 1./recon_loss
 	belief /=belief.sum()
 	return belief
+def entropy_from_belief(belief):
+	return -(belief*np.log(1e-8 + belief)).sum()
 def init_autoencoder():
 	if CUDA_VAILABLE:
 		return nn.Sequential(Encoder(), Decoder()).cuda()
