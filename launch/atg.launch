@@ -1,4 +1,6 @@
 <launch>
+  <param name="data_path" value="$(find atg_autoencoder_mixture)/data/" />
+  <param name="results_path" value="$(find atg_autoencoder_mixture)/results/" />
   <node name="aspect_transition_graph" pkg="atg_autoencoder_mixture" type="atg_node.py" output="screen"/>
   <node name="atg_visualizer" pkg="atg_autoencoder_mixture" type="atg_visualizer.py" output="screen"/>
   <node name="current_observation" pkg="atg_autoencoder_mixture" type="current_observation_server.py" output="screen"/>

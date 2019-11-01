@@ -36,6 +36,8 @@ class AspectTransitionGraph:
         self.bridge = CvBridge()
         self.get_current_observation = rospy.ServiceProxy('current_observation', CurrentObservation)
         self.rate = rospy.Rate(rate)
+        self.data_folder_path = rospy.get_param("data_path")
+        print('PATH: ', self.data_folder_path )
         ros_image = self.get_current_observation().img
         first_image = self.bridge.imgmsg_to_cv2(ros_image)
         first_image = cv2.cvtColor(first_image, cv2.COLOR_BGR2RGB)
@@ -71,25 +73,27 @@ class AspectTransitionGraph:
         reward_s_a = {}
         self.reward_a = 1e-8*np.ones(NUM_ACTIONS)
         while not rospy.is_shutdown():
-
+            self.rate.sleep()
             ros_image = self.get_current_observation().img
+            print('Done observing!!')
             cv_image = self.bridge.imgmsg_to_cv2(ros_image)
             cv_image = cv2.cvtColor(cv_image, cv2.COLOR_BGR2RGB)
             if NEED_CROP:
                 cv_image = cv_image[self.c_coord_tl[1]:self.c_coord_br[1], self.c_coord_tl[0]:self.c_coord_br[0]]
-            if obs_save_dir is not None:
-                obs_save_dir_full = '/home/daniel/Desktop/catkin_ws/src/atg_autoencoder_mixture/' + obs_save_dir
-                if not os.path.exists(obs_save_dir_full):
-                    os.makedirs(obs_save_dir_full)
-
-                write_loc = os.path.join(obs_save_dir_full, 'obs_' + str(self.observation_count) + '.jpg')
-                cv2.imwrite(write_loc , cv_image)
             image = to_var(cv_to_tensor(cv_image, image_size=IMAGE_SIZE))
             recon_loss, recon_loss_norm = get_reconstruction_loss_with_all_ae(image,
                                                                  self.autoencoder_mixture,
                                                                  loss_fn = torch.nn.functional.mse_loss)
 
             c_aspect_node = current_aspect_node(recon_loss, self.aspect_count)
+            if obs_save_dir is not None:
+                obs_save_dir_full = self.data_folder_path + obs_save_dir + '/' + str(c_aspect_node) + '/'
+                if not os.path.exists(obs_save_dir_full):
+                    os.makedirs(obs_save_dir_full)
+                writing_path = 'obs_' + str(self.observation_count) + '.jpg'
+                write_loc = os.path.join(obs_save_dir_full, writing_path)
+
+                cv2.imwrite(write_loc , cv_image)
 
             atg_mat_fma = Float64MultiArray()
             if recon_loss_norm.min() < RECONSTRUCTION_TOLERANCE:
@@ -119,7 +123,7 @@ class AspectTransitionGraph:
                                   optimizer,
                                   criterion,
                                   data_loader,
-                                  number_of_epochs=5,
+                                  number_of_epochs=NUMBER_OF_EPOCHS,
                                   name='aspect_autoencoder_' + str(self.aspect_count), verbose=False)
 
                 test_image = to_var(gen_images[0].unsqueeze(0))
@@ -199,7 +203,6 @@ class AspectTransitionGraph:
                 dim3.size  = self.atg_mat.shape[2]
 
                 dims = [dim1, dim2, dim3]
-
                 atg_mat_layout.dim = dims
                 atg_mat_layout.data_offset = 0
 
@@ -235,8 +238,9 @@ class AspectTransitionGraph:
         return result
 def main(args):
     at = AspectTransitionGraph(rate=ATG_NODE_RATE)
+    result_folder_path = rospy.get_param("results_path")
     number_of_experiments = 1
-    experiment_name = 'can_random'
+    experiment_name = EXPERIMENT_NAME
     results = {}
     results['number_of_experiments'] = number_of_experiments
     exp_time = time.time()
@@ -246,13 +250,14 @@ def main(args):
             print('='*100)
             print('[ RUNNING EXPERIMENT %d / %d ]'%(exp + 1, number_of_experiments))
             print('='*100)
-            results[exp] =  at.build_atg('data/'+experiment_name + '/' + experiment_name + '_' + str(exp))
+            results[exp] =  at.build_atg(experiment_name + '/' + experiment_name + '_' + str(exp))
             at.reset_atg()
             print('='*100)
             print('[ DONE RUNNING EXPERIMENT %d / %d ]'%(exp +1, number_of_experiments))
             print('='*100)
-
-        with open('/home/daniel/Desktop/catkin_ws/src/atg_autoencoder_mixture/results_'+experiment_name+'.pickle', 'wb') as handle:
+        if not os.path.exists(result_folder_path + experiment_name):
+            os.makedirs(result_folder_path + experiment_name)
+        with open(result_folder_path + experiment_name + '.pickle', 'wb') as handle:
             pickle.dump(results, handle, protocol=pickle.HIGHEST_PROTOCOL)
         print('Experiment Done!!! it took %.2f mins'%((time.time()-exp_time)/60.))
     except KeyboardInterrupt:
