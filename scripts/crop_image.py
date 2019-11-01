@@ -1,50 +1,43 @@
-import cv2
+from __future__ import print_function
+from matplotlib.widgets import RectangleSelector
 import numpy as np
-
+import matplotlib.pyplot as plt
+from PIL import Image
 
 class CropImage(object):
-    def __init__(self, cv_image):
-        self.original_image = cv_image
-
-        self.clone = self.original_image.copy()
-
-        cv2.namedWindow('image')
-        cv2.setMouseCallback('image', self.extract_coordinates)
-
-        # Bounding box reference points and boolean if we are extracting coordinates
+    def __init__(self, image):
         self.image_coordinates = []
-        self.extract = False
+        fig, current_ax = plt.subplots()
+        plt.imshow(image)
 
-    def extract_coordinates(self, event, x, y, flags, parameters):
-        # Record starting (x,y) coordinates on left mouse button click
-        if event == cv2.EVENT_LBUTTONDOWN:
-            self.image_coordinates = [(x,y)]
-            self.extract = True
+        toggle_selector.RS = RectangleSelector(current_ax, self.line_select_callback,
+                                               drawtype='box', useblit=True,
+                                               button=[1, 3],  # don't use middle button
+                                               minspanx=5, minspany=5,
+                                               spancoords='pixels',
+                                               interactive=True)
+        plt.connect('key_press_event', toggle_selector)
+        plt.show()
 
-        # Record ending (x,y) coordintes on left mouse bottom release
-        elif event == cv2.EVENT_LBUTTONUP:
-            self.image_coordinates.append((x,y))
-            self.extract = False
-            print('top left: {}, bottom right: {}'.format(self.image_coordinates[0], self.image_coordinates[1]))
-
-            # Draw rectangle around ROI
-            cv2.rectangle(self.clone, self.image_coordinates[0], self.image_coordinates[1], (0,255,0), 2)
-            cv2.imshow("image", self.clone)
-
-        # Clear drawing boxes on right mouse button click
-        elif event == cv2.EVENT_RBUTTONDOWN:
-            self.clone = self.original_image.copy()
-
-    def show_image(self):
-        return self.clone
+    def line_select_callback(self, eclick, erelease):
+        'eclick and erelease are the press and release events'
+        x1, y1 = eclick.xdata, eclick.ydata
+        x2, y2 = erelease.xdata, erelease.ydata
+        print("(%3.2f, %3.2f) --> (%3.2f, %3.2f)" % (x1, y1, x2, y2))
+        print(" The button you used were: %s %s" % (eclick.button, erelease.button))
+        self.image_coordinates = [[int(x1), int(y1)],[int(x2), int(y2)]]
     def get_crop_coordinates(self):
         return self.image_coordinates
-
+def toggle_selector(event):
+    print(' Key pressed.')
+    if event.key in ['Q', 'q'] and toggle_selector.RS.active:
+        print(' RectangleSelector deactivated.')
+        toggle_selector.RS.set_active(False)
+    if event.key in ['A', 'a'] and not toggle_selector.RS.active:
+        print(' RectangleSelector activated.')
+        toggle_selector.RS.set_active(True)
 
 if __name__ == '__main__':
-    image = cv2.imread("../data/real_aspects/Aspect-Raw1.jpg")
-    ci = CropImage(image)
-
-    cv2.imshow('image', ci.show_image())
-    key = cv2.waitKey(0)
-    print(ci.get_crop_coordinates())
+    image = Image.open('../../../1.jpg', 'r')
+    ci = CropImage(np.asarray(image))
+    print(ci.image_coordinates)

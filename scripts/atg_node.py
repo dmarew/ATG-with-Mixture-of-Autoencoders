@@ -41,8 +41,6 @@ class AspectTransitionGraph:
         first_image = cv2.cvtColor(first_image, cv2.COLOR_BGR2RGB)
         print('Got first Image')
         ci = CropImage(first_image)
-        cv2.imshow('image', ci.show_image())
-        key = cv2.waitKey(0)
         self.c_coord_tl, self.c_coord_br = ci.get_crop_coordinates()
 
         self.reset_atg()
@@ -147,7 +145,7 @@ class AspectTransitionGraph:
                         atg_entry_key = (s, action,  s_prime)
 
                         self.atg_mat = atg_dict_to_mat(self.atg, len(c_aspect_node_blief), NUM_ACTIONS)
-                        
+
 
                         if first_node_found:
 

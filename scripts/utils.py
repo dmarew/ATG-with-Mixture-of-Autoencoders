@@ -1,6 +1,6 @@
 from common import *
 from models import *
-
+rect = None
 def to_var(x, volatile=False):
 	if CUDA_VAILABLE:
 		x = x.cuda()
@@ -154,9 +154,20 @@ def generate_atg_graph(atg_mat, aspect_node_images, cv_bridge):
 					G.add_edge(node_list[s], node_list[s_prime], weight=atg_mat[s, a, s_prime])
 					num_edges +=1
 	return G, pos, labels, num_edges
-def line_select_callback(eclick, erelease):
-    x1, y1 = eclick.xdata, eclick.ydata
-    x2, y2 = erelease.xdata, erelease.ydata
 
-    rect = plt.Rectangle( (min(x1,x2),min(y1,y2)), np.abs(x1-x2), np.abs(y1-y2) )
-    print(rect)
+def line_select_callback(eclick, erelease):
+	'eclick and erelease are the press and release events'
+	x1, y1 = eclick.xdata, eclick.ydata
+	x2, y2 = erelease.xdata, erelease.ydata
+	print("(%3.2f, %3.2f) --> (%3.2f, %3.2f)" % (x1, y1, x2, y2))
+	print(" The button you used were: %s %s" % (eclick.button, erelease.button))
+	rect = [[x1, y1],[x2, y2]]
+
+def toggle_selector(event):
+    print(' Key pressed.')
+    if event.key in ['Q', 'q'] and toggle_selector.RS.active:
+        print(' RectangleSelector deactivated.')
+        toggle_selector.RS.set_active(False)
+    if event.key in ['A', 'a'] and not toggle_selector.RS.active:
+        print(' RectangleSelector activated.')
+        toggle_selector.RS.set_active(True)

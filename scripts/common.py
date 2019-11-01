@@ -19,6 +19,7 @@ import networkx as nx
 import random
 from mpl_toolkits.mplot3d import Axes3D
 import matplotlib.pyplot as plt
+from matplotlib.widgets import RectangleSelector
 
 ATG_NODE_RATE = 0.2
 RECONSTRUCTION_TOLERANCE = 0.008
