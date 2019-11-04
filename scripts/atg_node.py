@@ -114,6 +114,9 @@ class AspectTransitionGraph:
                 self.autoencoder_mixture[self.aspect_count] = {}
                 self.autoencoder_mixture[self.aspect_count]['autoencoder'] = init_autoencoder()
                 gen_images = generate_random_versions_of_image(image.cpu().squeeze(0), random_transformer, n_versions=300)
+                #for i in range(len(gen_images)):
+                #    imshow(make_grid(gen_images[i]), True)
+
                 ds = AutoEncoderDataset(gen_images, aspect_image=image)
                 optimizer = optim.Adam(self.autoencoder_mixture[self.aspect_count]['autoencoder'].parameters(), lr=1e-3)
                 criterion = nn.BCELoss()
@@ -124,7 +127,7 @@ class AspectTransitionGraph:
                                   criterion,
                                   data_loader,
                                   number_of_epochs=NUMBER_OF_EPOCHS,
-                                  name='aspect_autoencoder_' + str(self.aspect_count), verbose=False)
+                                  name='aspect_autoencoder_' + str(self.aspect_count), verbose=VERBOSE)
 
                 test_image = to_var(gen_images[0].unsqueeze(0))
                 test_image_recon = self.autoencoder_mixture[self.aspect_count]['autoencoder'](test_image)

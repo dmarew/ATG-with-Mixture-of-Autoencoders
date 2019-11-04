@@ -21,15 +21,16 @@ from mpl_toolkits.mplot3d import Axes3D
 import matplotlib.pyplot as plt
 from matplotlib.widgets import RectangleSelector
 
+VERBOSE =  True
 ATG_NODE_RATE = 0.5
 RECONSTRUCTION_TOLERANCE = 0.01
-NUMBER_OF_EPOCHS = 5
+NUMBER_OF_EPOCHS = 10
 CONVERGENCE_THRESHOLD = 20
 MAX_QUEUE_SIZE = 10
 IMAGE_SIZE = 64
 NEED_CROP = True
 ACTION_SELECTION_MODE = 'RANDOM'
-EXPERIMENT_NAME = 'cup/cap_random_5'
+EXPERIMENT_NAME = 'cup_random'
 CUDA_VAILABLE = torch.cuda.is_available()
 ACTION_PARAMETER_SPACE = np.arange(-2.61, 2.61, .785)
 NUM_ACTIONS = len(ACTION_PARAMETER_SPACE)
