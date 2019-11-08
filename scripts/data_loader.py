@@ -22,17 +22,17 @@ class ATGDataset(Dataset):
 
         self.dataset   = dataset
         self.transformer = transforms.Compose([
-                           transforms.Resize(image_size + 2),
-                           transforms.CenterCrop(image_size),
+                           transforms.Resize((image_size, image_size)),
                            transforms.ToTensor()])
 
     def __getitem__(self, index):
         """
         returns
         """
-        image = Image.open(self.dataset[index])
+        print(self.dataset + str(index) + '.jpg')
+        image = Image.open(self.dataset + str(index) + '.jpg')
         image = self.transformer(image)
         return image
     def __len__(self):
         """length of dataset"""
-        return len(self.dataset)
+        return len(glob.glob(self.dataset + '*'))

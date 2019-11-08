@@ -1,11 +1,11 @@
 from common import *
 from utils import *
 
-file = open('../results_can_random.pickle', 'rb')
+file = open('../results/cup_random.pickle', 'rb')
 result = pickle.load(file)[0]
 autoencoder_mixture = result['autoencoder_mixture']
 atg_mat = result['atg']
-for goal_image_path in (glob.glob('../data/can_random/can_random_0/*21.jpg')):
+for goal_image_path in (glob.glob('../data/cup_random/cup_random_0/aspect_nodes/*')):
     print(goal_image_path)
     goal_image = transforms.functional.resize(Image.open(goal_image_path), (IMAGE_SIZE, IMAGE_SIZE))
     goal_image = to_var(transforms.functional.to_tensor(goal_image)).unsqueeze(0)

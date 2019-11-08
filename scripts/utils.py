@@ -14,7 +14,7 @@ def pil_to_cv(img):
 	cv_img  = np.array(img)
 	return cv2.cvtColor(cv_img, cv2.COLOR_RGB2BGR)
 
-def cv_to_tensor(img, image_size=128):
+def cv_to_tensor(img, image_size=IMAGE_SIZE):
 	img = cv_to_pil(img)
 	trans = transforms.Compose([transforms.Resize((image_size, image_size)),
 	                   transforms.ToTensor()])
@@ -73,14 +73,30 @@ def get_reconstruction_loss_with_all_ae(image, autoencoder_mixture, loss_fn):
 	for aspect, aspect_param in autoencoder_mixture.items():
 		image = to_var(image)
 		recon_image = aspect_param['autoencoder'](image)
-		recon_loss  = loss_fn(recon_image, image).cpu().data.sum()
+		if USE_ASPECT_IMAGE and autoencoder_mixture[aspect]['image'] is not None:
+			recon_loss  = loss_fn(recon_image, to_var(autoencoder_mixture[aspect]['image'])).cpu().data.sum()
+		else:
+			recon_loss  = loss_fn(recon_image, image).cpu().data.sum()
 		recon_loss_mix.append(recon_loss)
 		recon_loss_mix_normalized.append(abs(recon_loss - aspect_param['recon_error']))
 	return np.array(recon_loss_mix), np.array(recon_loss_mix_normalized)
+def get_recon_likelihood_with_all_ae(image, autoencoder_mixture):
+	recon_loss_mix = []
+	for aspect, aspect_param in autoencoder_mixture.items():
+		image = to_var(image)
+		recon_image = aspect_param['autoencoder'](image)
+		recon_loss  = stat_of_mse_loss(image, recon_image)[0]
+		recon_ll = 1 - scipy.stats.norm(aspect_param['stat'][0], aspect_param['stat'][1]).cdf(recon_loss)
+		recon_loss_mix.append(recon_ll)
+	return np.array(recon_loss_mix)
 def current_aspect_node(recon_loss, aspect_count):
 	if np.min(recon_loss) > RECONSTRUCTION_TOLERANCE:
 		return aspect_count
 	return int(np.where(recon_loss==np.min(recon_loss))[0])
+def current_aspect_node_ll(recon_ll):
+	if np.max(recon_ll) < RECONSTRUCTION_TOLERANCE_LL:
+		return len(recon_ll)
+	return np.argmax(recon_ll)
 def get_mixure_output(autoencoder_mixture, images, n_clusters=10):
     output = []
     for cluster in range(n_clusters):
@@ -100,7 +116,10 @@ def reward_dict_to_mat(reward_dict, num_aspect_nodes):
 		s, a = key
 		r_s_a[s, a] = value['mean']
 	return 	r_s_a
-def belief_for_observation(image, autoencoder_mixture, loss_fn):
+def belief_for_observation(image, autoencoder_mixture):
+    recon_ll = get_recon_likelihood_with_all_ae(image, autoencoder_mixture)
+    return belief_from_recon_ll(recon_ll)
+def belief_for_observation_old(image, autoencoder_mixture, loss_fn):
     belief = 1./get_reconstruction_loss_with_all_ae(image, autoencoder_mixture, loss_fn)[0]
     belief /= belief.sum()
     return belief
@@ -108,12 +127,18 @@ def belief_from_recon_loss(recon_loss):
 	belief = 1./recon_loss
 	belief /=belief.sum()
 	return belief
+def belief_from_recon_ll(recon_ll):
+	return recon_ll/recon_ll.sum()
 def entropy_from_belief(belief):
 	return -(belief*np.log(1e-8 + belief)).sum()
 def init_autoencoder():
 	if CUDA_VAILABLE:
 		return nn.Sequential(Encoder(), Decoder()).cuda()
 	return nn.Sequential(Encoder(), Decoder())
+def init_autoencoder_small():
+	if CUDA_VAILABLE:
+		return nn.Sequential(SmallEncoder(), SmallDecoder()).cuda()
+	return nn.Sequential(SmallEncoder(), SmallDecoder())
 def train_autoencoder(autoencoder, optimizer, criterion, data_loader, number_of_epochs=1, name='main', verbose=False):
 	print('Training %s ...'%(name))
 	for epoch in range(number_of_epochs):
@@ -124,7 +149,7 @@ def train_autoencoder(autoencoder, optimizer, criterion, data_loader, number_of_
 
 			in_images = to_var(in_images)
 			out_images = autoencoder(in_images)
-			loss = criterion(out_images, aspect_image.squeeze(1))
+			loss = criterion(out_images, to_var(aspect_image))
 
 			optimizer.zero_grad()
 			loss.backward()
@@ -134,8 +159,12 @@ def train_autoencoder(autoencoder, optimizer, criterion, data_loader, number_of_
 				print('epoch %d loss: %.5f' % (epoch, running_loss/((batch_index + 1))))
 			if batch_index != 0 and batch_index % 1000 == 0:
 				break
-
+	autoencoder.eval()
 	print('Done training %s'%(name))
+def stat_of_mse_loss(input, target):
+	batch_size = input.shape[0]
+	se = torch.sum((input.view(batch_size, -1) - target.view(batch_size, -1))**2, axis=1)
+	return torch.mean(se).cpu().data.numpy(), torch.std(se).cpu().data.numpy()
 def generate_atg_graph(atg_mat, aspect_node_images, cv_bridge):
 	n_aspects, action_space, _ = atg_mat.shape
 	G = nx.MultiDiGraph()
@@ -154,19 +183,13 @@ def generate_atg_graph(atg_mat, aspect_node_images, cv_bridge):
 					G.add_edge(node_list[s], node_list[s_prime], weight=atg_mat[s, a, s_prime])
 					num_edges +=1
 	return G, pos, labels, num_edges
+def random_image(data_path):
+	image_paths = glob.glob(data_path + '*')
 
-def line_select_callback(eclick, erelease):
-	'eclick and erelease are the press and release events'
-	x1, y1 = eclick.xdata, eclick.ydata
-	x2, y2 = erelease.xdata, erelease.ydata
-	print("(%3.2f, %3.2f) --> (%3.2f, %3.2f)" % (x1, y1, x2, y2))
-	rect = [[x1, y1],[x2, y2]]
-
-def toggle_selector(event):
-    print(' Key pressed.')
-    if event.key in ['Q', 'q'] and toggle_selector.RS.active:
-        print(' RectangleSelector deactivated.')
-        toggle_selector.RS.set_active(False)
-    if event.key in ['A', 'a'] and not toggle_selector.RS.active:
-        print(' RectangleSelector activated.')
-        toggle_selector.RS.set_active(True)
+	if len(image_paths) > 0:
+		image = Image.open(image_paths[int(np.random.randint(len(image_paths)))])
+		return to_var(cv_to_tensor(pil_to_cv(image)))
+def image_with_index(data_path, index):
+	image_path = data_path + str(index) + '.jpg'
+	image = Image.open(image_path)
+	return to_var(cv_to_tensor(pil_to_cv(image)))
