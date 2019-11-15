@@ -29,7 +29,7 @@ class ATGDataset(Dataset):
         """
         returns
         """
-        print(self.dataset + str(index) + '.jpg')
+        print(self.dataset + str(index+1) + '.jpg')
         image = Image.open(self.dataset + str(index) + '.jpg')
         image = self.transformer(image)
         return image

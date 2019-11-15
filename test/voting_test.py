@@ -4,9 +4,9 @@ from common import *
 from utils import *
 from data_loader import *
 from random_transformer import *
-file = open('can.pickle', 'rb')
+file = open('can_1000.pickle', 'rb')
 autoencoder_mixture = pickle.load(file)
-dataset_paths = '../data/can_online_testing/can_online_testing_0/dataset/obs_'
+dataset_paths = '../data/can_1000/can_1000_0/dataset/obs_'
 
 sim_ds = ATGDataset(dataset_paths, image_size=IMAGE_SIZE)
 
